@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FoodBazaar.Data
 {
-    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : 
+        IdentityDbContext<ApplicationUser>(options)
     {
         public DbSet<Category> Category { get; set; }
+        public DbSet<Product> Product { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -15,6 +17,10 @@ namespace FoodBazaar.Data
                 new Category { Id = 2, Name = "Entrees" },
                 new Category { Id = 3, Name = "Desserts" }
             );
+
+    
         }
+
+
     }
 }

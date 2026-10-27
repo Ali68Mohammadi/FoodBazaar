@@ -1,0 +1,131 @@
+﻿@page "/product"
+
+@using System.Globalization
+@using FoodBazaar.Components.Pages.Shared
+
+@inject IProductRepository _productRepository
+@inject ICategoryRepository _categoryRepository
+@inject IJSRuntime _JS
+
+<BsModal OnModalConfirmation="ConfirmDelete_click"
+         ButtonBootstrapStyle="btn-danger"
+         ButtonText="Delete "
+         Title="Are you sure you want to delete this product?">
+</BsModal>
+
+@if (IsProcessing)
+{
+    <div class="position-absolute w-75 d-flex flex-column align-items-center bg-white justify-content-center">
+        <img src="/images/loading.gif" alt="Loading..." />
+    </div>
+}
+else
+{
+    <div class="shadow border-0 mt-4">
+        <div class="card-header bg-black ml-0 py-3">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <h2 class="text-white py-2">Product List</h2>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <div class="row pb-3">
+                <div class="col-12 text-end">
+                    <a href="/product/create" class="btn btn-lg btn-secondary" style="width:250px;">
+                        <i class="bi bi-plus-square"></i> Add new Product
+                    </a>
+                </div>
+            </div>
+            @if (products != null && products.Any())
+            {
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Price</th>
+                            <th>Special Tag</th>
+                            <th>Category</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in products)
+                        {
+                            <tr>
+                                <td>@product.Name</td>
+                                <td>@product.Price.ToString("C", CultureInfo.GetCultureInfo("en-US"))</td>
+                                <td><span class="badge text-bg-info"> @product.SpecialTag</span></td>
+                                <td>@product.Category.Name</td>
+                                <td>
+                                    <a href="/product/update/@product.Id" class="btn  btn-primary">
+                                        <i class="bi bi-pencil-square"></i> Edit
+                                    </a>
+                                    <button class="btn btn-danger" @onclick="() => HandleDelete(product.Id)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+
+    public bool IsProcessing { get; set; } = true;
+    private int DeleteProductId { get; set; } = 0;
+
+    private IEnumerable<Product> products = new List<Product>();
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadProducts();
+            IsProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        products = await _productRepository.GetAllAsync();
+    }
+
+    private async Task HandleDelete(int id)
+    {
+        DeleteProductId = id;
+        await _JS.InvokeVoidAsync("ShowConfirmationModal"); // call JS function to show the modal from common.js file
+    }
+
+    private async Task ConfirmDelete_click(bool isConfirmed)
+    {
+        IsProcessing = true;
+        await _JS.InvokeVoidAsync("HideConfirmationModal");// call JS function to hide the modal from common.js file
+        if (isConfirmed && DeleteProductId > 0)
+        {
+
+            StateHasChanged();
+            bool Result = await _productRepository.DeleteAsync(DeleteProductId);
+            if (Result)
+            {
+                await _JS.ToasterSuccess("Product deleted successfully.");
+            }
+        }
+        else
+        {
+            await _JS.ToasterError("Failed to delete product.");
+        }
+
+        await LoadProducts();
+
+        DeleteProductId = 0;
+        IsProcessing = false;
+    }
+
+}
