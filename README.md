@@ -15,7 +15,7 @@ The application directly communicates with a SQL Server database using Entity Fr
 - **Framework:** .NET 10 (ASP.NET Core & Blazor Server)
 - **Database:** SQL Server, Entity Framework Core
 - **Patterns:** Repository Pattern, Dependency Injection
-- **Frontend:** HTML, CSS, Bootstrap 5, Bootstrap Icons
+- **Frontend:** HTML, CSS, Bootstrap 5, Bootstrap Icons, Bootastrap Modal, Javascript
 - **Libraries:** Toastr.js (for notifications)
 
 ## 📁 Project Structure
