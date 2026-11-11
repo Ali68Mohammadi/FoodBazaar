@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FoodBazaar.Repository
 {
-    public class ProductRepository(ApplicationDbContext db, IWebHostEnvironment webHostEnvironment) : IProductRepository
+    public class ProductRepository(ApplicationDbContext db, IWebHostEnvironment webHostEnvironment)
+        : IProductRepository
     {
 
         public async Task<Product> CreateAsync(Product product)
@@ -71,6 +72,38 @@ namespace FoodBazaar.Repository
             return entity != null;
         }
 
+        public async Task<(IEnumerable<Product> Items, int TotalCount)> GetProductsByCategoryAsync(
+            string searchString,
+            int categoryId,
+            int pageNumber,
+            int pageSize)
+        {
+
+            IQueryable<Product> query;
+            if (categoryId == 0)
+            {
+                query = db.Product
+             .AsNoTracking()
+             .Include(product => product.Category)
+             .Where(product => product.Name.Contains(searchString));
+            }
+            else
+            {
+                query = db.Product
+                           .AsNoTracking()
+                           .Include(product => product.Category)
+                           .Where(product => product.CategoryId == categoryId
+                            && product.Name.Contains(searchString));
+            }
+            int totalCount = await query.CountAsync();
+
+            var list = await query
+                .OrderBy(product => product.CategoryId)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+            return (list, totalCount);
+        }
     }
 
 }
