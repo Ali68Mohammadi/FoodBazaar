@@ -9,6 +9,9 @@ The application directly communicates with a SQL Server database using Entity Fr
 - **Modern UI/UX:** Built with Bootstrap 5, featuring Toastr notifications and Bootstrap Modals for safe delete confirmations.
 - **Image Handling:** Secure file upload and management for product images.
 - **Server-Side Interaction:** Real-time UI updates using Blazor Server and SignalR.
+- Public registration creates Customer accounts.
+- Admins can create Customer and Admin accounts.
+- SuperAdmins can view users, change roles, and delete Customer or Admin accounts.
 
 ## 🛠️ Tech Stack
 
