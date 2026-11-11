@@ -1,10 +1,13 @@
 # 🍔 FoodBazaar
 
-A full-stack food ordering and management web application built with **ASP.NET Core (Blazor Server)**. 
+A restaurant menu and management web application built with **ASP.NET Core (Blazor Server)**.
 The application directly communicates with a SQL Server database using Entity Framework Core, following the Repository Pattern for clean data access.
 
 ## 🚀 Key Features
 
+- **Public Menu:** Browse food cards with product photos, descriptions, and prices.
+- **Menu Search and Filters:** Search by product name, filter by category, and choose how many items to show per page.
+- **Server-Side Pagination:** EF Core applies the search and category filters in SQL Server, counts matching products, and loads only the requested page.
 - **Product & Category Management:** Complete CRUD operations.
 - **Modern UI/UX:** Built with Bootstrap 5, featuring Toastr notifications and Bootstrap Modals for safe delete confirmations.
 - **Image Handling:** Secure file upload and management for product images.
@@ -18,7 +21,7 @@ The application directly communicates with a SQL Server database using Entity Fr
 - **Framework:** .NET 10 (ASP.NET Core & Blazor Server)
 - **Database:** SQL Server, Entity Framework Core
 - **Patterns:** Repository Pattern, Dependency Injection
-- **Frontend:** HTML, CSS, Bootstrap 5, Bootstrap Icons, Bootastrap Modal, Javascript
+- **Frontend:** HTML, CSS, Bootstrap 5, Bootstrap Icons, Bootstrap Modal, JavaScript
 - **Libraries:** Toastr.js (for notifications)
 
 ## 📁 Project Structure
@@ -30,7 +33,9 @@ The application directly communicates with a SQL Server database using Entity Fr
 - **FoodBazaar.ViewModels:** Models used for data transfer and form validation.
 - **FoodBazaar.Components:** Blazor components (Pages, Shared, Layouts).
 
+## Getting Started
 
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/Ali68Mohammadi/FoodBazaar.git
+   ```
