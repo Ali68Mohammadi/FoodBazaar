@@ -1,10 +1,13 @@
-﻿@page "/Account/Manage/DeletePersonalData"
+@page "/Account/Manage/DeletePersonalData"
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using FoodBazaar.Data
+@using FoodBazaar.Utility
 
 @inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<DeletePersonalData> Logger
@@ -75,12 +78,20 @@
             return;
         }
 
+        await using var transaction = await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        if (await UserManager.IsInRoleAsync(user, SD.Role_SuperAdmin))
+        {
+            message = "Error: A SuperAdmin must change your role before this account can be deleted.";
+            return;
+        }
+
         var result = await UserManager.DeleteAsync(user);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException("Unexpected error occurred deleting user.");
         }
 
+        await transaction.CommitAsync();
         await SignInManager.SignOutAsync();
 
         var userId = await UserManager.GetUserIdAsync(user);

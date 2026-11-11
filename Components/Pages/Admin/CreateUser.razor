@@ -1,0 +1,147 @@
+@page "/Admin/Users/Create"
+@attribute [Authorize(Roles = SD.Role_Admin)]
+@attribute [ExcludeFromInteractiveRouting]
+
+@using System.ComponentModel.DataAnnotations
+@using FoodBazaar.Utility
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Create user</PageTitle>
+
+<h1>Create user</h1>
+
+@if (successMessage is not null)
+{
+    <span hidden data-toast-type="success" data-toast-message="@successMessage"></span>
+}
+
+<EditForm Model="Input" method="post" FormName="admin-create-user" OnValidSubmit="CreateUserAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+
+    @if (errors.Count > 0)
+    {
+        <ul class="alert alert-danger list-unstyled" role="alert">
+            @foreach (var error in errors)
+            {
+                <li>@error.Description</li>
+            }
+        </ul>
+    }
+
+    <div class="mb-3">
+        <label for="new-user-email" class="form-label">Email</label>
+        <InputText id="new-user-email" type="email" class="form-control" @bind-Value="Input.Email" autocomplete="off" />
+    </div>
+
+    <div class="mb-3">
+        <label for="new-user-role" class="form-label">Role</label>
+        <InputSelect id="new-user-role" class="form-select" @bind-Value="Input.Role">
+            <option value="@SD.Role_Customer">Customer</option>
+            <option value="@SD.Role_Admin">Admin</option>
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label for="new-user-password" class="form-label">Initial password</label>
+        <InputText id="new-user-password" type="password" class="form-control" @bind-Value="Input.Password" autocomplete="new-password" />
+    </div>
+
+    <div class="mb-3">
+        <label for="new-user-confirm-password" class="form-label">Confirm password</label>
+        <InputText id="new-user-confirm-password" type="password" class="form-control" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" />
+    </div>
+
+    <p class="form-text">Verify the email address before creating the account. The account can sign in immediately.</p>
+    <button type="submit" class="btn btn-primary">Create user</button>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    private IReadOnlyList<IdentityError> errors = [];
+    private string? successMessage;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task CreateUserAsync()
+    {
+        var role = Input.Role;
+        if (role is not (SD.Role_Customer or SD.Role_Admin))
+        {
+            errors = [new IdentityError { Description = "Choose Customer or Admin." }];
+            return;
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = Input.Email,
+            Email = Input.Email,
+            EmailConfirmed = true
+        };
+
+        await using (var transaction = await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable))
+        {
+            var actor = await UserManager.GetUserAsync(HttpContext.User);
+            if (actor is null || !await UserManager.IsInRoleAsync(actor, SD.Role_Admin))
+            {
+                errors = [new IdentityError { Description = "You are not authorized to create users." }];
+                return;
+            }
+
+            if (!await RoleManager.RoleExistsAsync(role))
+            {
+                var roleCreation = await RoleManager.CreateAsync(new IdentityRole(role));
+                if (!roleCreation.Succeeded)
+                {
+                    errors = roleCreation.Errors.ToArray();
+                    return;
+                }
+            }
+
+            var creation = await UserManager.CreateAsync(user, Input.Password);
+            if (!creation.Succeeded)
+            {
+                errors = creation.Errors.ToArray();
+                return;
+            }
+
+            var assignment = await UserManager.AddToRoleAsync(user, role);
+            if (!assignment.Succeeded)
+            {
+                errors = assignment.Errors.ToArray();
+                return;
+            }
+
+            await transaction.CommitAsync();
+        }
+
+        successMessage = $"Created {user.Email} as {role}.";
+        Input = new();
+    }
+
+    private sealed class InputModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required]
+        public string Role { get; set; } = SD.Role_Customer;
+
+        [Required, StringLength(100)]
+        public string Password { get; set; } = "";
+
+        [Required, Compare(nameof(Password))]
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

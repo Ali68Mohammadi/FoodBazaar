@@ -1,0 +1,287 @@
+@page "/Admin/Users"
+@attribute [Authorize(Roles = SD.Role_SuperAdmin)]
+@attribute [ExcludeFromInteractiveRouting]
+
+@using FoodBazaar.Components.Pages.Shared
+@using FoodBazaar.Utility
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext DbContext
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ILogger<Users> Logger
+
+<PageTitle>Users</PageTitle>
+
+<h1>Users</h1>
+
+@if (successMessage is not null)
+{
+    <span hidden data-toast-type="success" data-toast-message="@successMessage"></span>
+}
+@if (errorMessage is not null)
+{
+    <span hidden data-toast-type="error" data-toast-message="@errorMessage"></span>
+}
+
+<BsModal Id="deleteUserModal" Title="Delete user permanently?">
+    <ConfirmContent>
+        <form method="post" @formname="delete-user" @onsubmit="DeleteUserAsync" class="d-inline">
+            <AntiforgeryToken />
+            <input type="hidden" name="UserId" />
+            <button type="submit" class="btn btn-lg btn-danger">Delete user</button>
+        </form>
+    </ConfirmContent>
+</BsModal>
+
+@if (successMessage is null && users.FirstOrDefault(user => user.Id == EditUserId) is { } selected)
+{
+    <form class="card card-body mb-3" method="post" @formname="change-role" @onsubmit="ChangeRoleAsync">
+        <AntiforgeryToken />
+        <input type="hidden" name="UserId" value="@selected.Id" />
+        <label class="form-label" for="user-role">Role for @selected.Name</label>
+        <select class="form-select mb-3" id="user-role" name="Role" required>
+            <option value="" selected="@(selected.Role is null)" disabled>Choose a role</option>
+            @foreach (var role in managedRoles)
+            {
+                <option value="@role" selected="@(selected.Role == role)">@role</option>
+            }
+        </select>
+        <div>
+            <button type="submit" class="btn btn-primary">Save role</button>
+            <a class="btn btn-outline-secondary ms-2" href="Admin/Users">Cancel</a>
+        </div>
+    </form>
+}
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Username</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in users)
+            {
+                <tr>
+                    <td>@user.Name</td>
+                    <td>@user.Email</td>
+                    <td>@(user.Role ?? "No role")</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="Admin/Users?editUserId=@Uri.EscapeDataString(user.Id)">Change role</a>
+                        @if (!user.IsSuperAdmin)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-bs-toggle="modal" data-bs-target="#deleteUserModal"
+                                    data-delete-user-id="@user.Id" data-delete-user-name="@user.Name">
+                                Delete
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(Name = "UserId", FormName = "delete-user")]
+    private string? SubmittedUserId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "editUserId")]
+    private string? EditUserId { get; set; }
+
+    [SupplyParameterFromForm(Name = "UserId", FormName = "change-role")]
+    private string? RoleUserId { get; set; }
+
+    [SupplyParameterFromForm(Name = "Role", FormName = "change-role")]
+    private string? SubmittedRole { get; set; }
+
+    private static readonly string[] managedRoles = [SD.Role_Customer, SD.Role_Admin, SD.Role_SuperAdmin];
+
+    private List<UserRow> users = [];
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var actor = await UserManager.GetUserAsync(HttpContext.User);
+        if (actor is null || !await UserManager.IsInRoleAsync(actor, SD.Role_SuperAdmin))
+        {
+            errorMessage = "You are not authorized to manage users.";
+            return;
+        }
+
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        var superAdminRole = UserManager.NormalizeName(SD.Role_SuperAdmin);
+        var adminRole = UserManager.NormalizeName(SD.Role_Admin);
+        var customerRole = UserManager.NormalizeName(SD.Role_Customer);
+        var rows = await DbContext.Users
+            .AsNoTracking()
+            .OrderBy(user => user.UserName)
+            .Select(user => new
+            {
+                user.Id,
+                Name = user.UserName ?? user.Id,
+                user.Email,
+                Roles = (from membership in DbContext.UserRoles
+                         join role in DbContext.Roles on membership.RoleId equals role.Id
+                         where membership.UserId == user.Id &&
+                             (role.NormalizedName == superAdminRole || role.NormalizedName == adminRole ||
+                              role.NormalizedName == customerRole)
+                         select role.NormalizedName).ToList()
+            })
+            .ToListAsync();
+
+        users = rows.Select(user => new UserRow(user.Id, user.Name, user.Email,
+            user.Roles.Contains(superAdminRole) ? SD.Role_SuperAdmin :
+            user.Roles.Contains(adminRole) ? SD.Role_Admin :
+            user.Roles.Contains(customerRole) ? SD.Role_Customer : null)).ToList();
+    }
+
+    private async Task ChangeRoleAsync()
+    {
+        if (SubmittedRole is not (SD.Role_Customer or SD.Role_Admin or SD.Role_SuperAdmin) ||
+            string.IsNullOrWhiteSpace(RoleUserId))
+        {
+            errorMessage = "Choose a user and a valid role.";
+            return;
+        }
+
+        await using var transaction = await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+        var actor = await UserManager.GetUserAsync(HttpContext.User);
+        if (actor is null || !await UserManager.IsInRoleAsync(actor, SD.Role_SuperAdmin))
+        {
+            errorMessage = "You are not authorized to change roles.";
+            return;
+        }
+
+        var target = await UserManager.FindByIdAsync(RoleUserId);
+        if (target is null)
+        {
+            errorMessage = "The user could not be found.";
+            return;
+        }
+
+        var currentRoles = await UserManager.GetRolesAsync(target);
+        if (currentRoles.Contains(SD.Role_SuperAdmin) && SubmittedRole != SD.Role_SuperAdmin &&
+            (await UserManager.GetUsersInRoleAsync(SD.Role_SuperAdmin)).Count <= 1)
+        {
+            errorMessage = "Assign another SuperAdmin before changing the last SuperAdmin's role.";
+            return;
+        }
+
+        // SuperAdmins also need Admin for the existing administration pages.
+        var desiredRoles = SubmittedRole == SD.Role_SuperAdmin
+            ? new[] { SD.Role_SuperAdmin, SD.Role_Admin }
+            : new[] { SubmittedRole };
+        var rolesToAdd = desiredRoles.Except(currentRoles).ToArray();
+        var rolesToRemove = currentRoles.Intersect(managedRoles).Except(desiredRoles).ToArray();
+
+        foreach (var role in rolesToAdd)
+        {
+            if (!await RoleManager.RoleExistsAsync(role) &&
+                !ShowResult(await RoleManager.CreateAsync(new IdentityRole(role))))
+            {
+                return;
+            }
+        }
+
+        if (rolesToAdd.Length > 0 && !ShowResult(await UserManager.AddToRolesAsync(target, rolesToAdd)))
+        {
+            return;
+        }
+
+        if (rolesToRemove.Length > 0 && !ShowResult(await UserManager.RemoveFromRolesAsync(target, rolesToRemove)))
+        {
+            return;
+        }
+
+        if ((rolesToAdd.Length > 0 || rolesToRemove.Length > 0) &&
+            !ShowResult(await UserManager.UpdateSecurityStampAsync(target)))
+        {
+            return;
+        }
+
+        await transaction.CommitAsync();
+        Logger.LogInformation("SuperAdmin {ActorId} set user {UserId} role to {Role}.", actor.Id, target.Id, SubmittedRole);
+        successMessage = $"Saved {SubmittedRole} for {target.UserName}.";
+
+        if (actor.Id == target.Id && SubmittedRole != SD.Role_SuperAdmin)
+        {
+            users = [];
+            return;
+        }
+
+        await LoadUsersAsync();
+    }
+
+    private bool ShowResult(IdentityResult result)
+    {
+        if (!result.Succeeded)
+        {
+            errorMessage = string.Join(" ", result.Errors.Select(error => error.Description));
+        }
+
+        return result.Succeeded;
+    }
+
+    private async Task DeleteUserAsync()
+    {
+        await using var transaction = await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+        var actor = await UserManager.GetUserAsync(HttpContext.User);
+        if (actor is null || !await UserManager.IsInRoleAsync(actor, SD.Role_SuperAdmin))
+        {
+            errorMessage = "You are not authorized to delete users.";
+            return;
+        }
+
+        var target = string.IsNullOrWhiteSpace(SubmittedUserId)
+            ? null
+            : await UserManager.FindByIdAsync(SubmittedUserId);
+
+        if (target is null)
+        {
+            errorMessage = "The user could not be found.";
+            return;
+        }
+
+        if (await UserManager.IsInRoleAsync(target, SD.Role_SuperAdmin))
+        {
+            errorMessage = "SuperAdmin accounts are protected from deletion here.";
+            return;
+        }
+
+        var result = await UserManager.DeleteAsync(target);
+        if (!result.Succeeded)
+        {
+            errorMessage = string.Join(" ", result.Errors.Select(error => error.Description));
+            return;
+        }
+
+        await transaction.CommitAsync();
+        Logger.LogInformation("SuperAdmin {ActorId} deleted user {UserId}.", actor.Id, target.Id);
+        successMessage = $"Deleted {target.UserName}.";
+        await LoadUsersAsync();
+    }
+
+    private sealed record UserRow(string Id, string Name, string? Email, string? Role)
+    {
+        public bool IsSuperAdmin => Role == SD.Role_SuperAdmin;
+    }
+}

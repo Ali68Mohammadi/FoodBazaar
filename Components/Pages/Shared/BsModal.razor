@@ -1,9 +1,9 @@
-﻿<!-- Modal -->
-<div class="modal fade" id="bsConfirmationModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<!-- Modal -->
+<div class="modal fade" id="@Id" tabindex="-1" aria-labelledby="@(Id + "-title")" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h1 class="modal-title fs-5" id="exampleModalLabel">@Title</h1>
+                <h1 class="modal-title fs-5" id="@(Id + "-title")">@Title</h1>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -11,10 +11,17 @@
                         @onclick="() => ConfirmationClicked(false)" style="width: 150px;">
                     Close
                 </button>
-                <button type="button" class="btn btn-lg @ButtonBootstrapStyle"
-                        @onclick="() => ConfirmationClicked(true)">
-                    @ButtonText
-                </button>
+                @if (ConfirmContent is null)
+                {
+                    <button type="button" class="btn btn-lg @ButtonBootstrapStyle"
+                            @onclick="() => ConfirmationClicked(true)">
+                        @ButtonText
+                    </button>
+                }
+                else
+                {
+                    @ConfirmContent
+                }
             </div>
             <div class="modal-footer">
             </div>
@@ -23,6 +30,12 @@
 </div>
 
 @code {
+    [Parameter]
+    public string Id { get; set; } = "bsConfirmationModal";
+
+    [Parameter]
+    public RenderFragment? ConfirmContent { get; set; }
+
     [Parameter]
     public EventCallback<bool> OnModalConfirmation { get; set; }
 
